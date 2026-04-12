@@ -14,6 +14,7 @@
   ],
   "author": "Md Shafayat Islam",
   "license": "MIT",
+  "type": "module",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
