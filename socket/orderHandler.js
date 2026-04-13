@@ -77,4 +77,87 @@ export const orderHandler = (io, socket) => {
       });
     }
   });
+
+  // cancel order
+  socket.on("cancelOrder", async (data, callback) => {
+    try {
+      const ordersCollection = getCollection("orders");
+      const order = await ordersCollection.findOne({ orderId: data?.orderId });
+
+      if (!order) {
+        return callback({
+          success: false,
+          message: "Order not found",
+        });
+      }
+
+      if (!["pending", "confirmed"].includes(order.status)) {
+        return callback({
+          success: false,
+          message: "Order cannot be cancelled",
+        });
+      }
+
+      await order.updateOne({
+        $set: {
+          status: "cancelled",
+          updatedAt: new Date(),
+          $push: {
+            statusHistory: {
+              status: "cancelled",
+              timestamp: new Date(),
+              by: socket.id,
+              note: data?.reason || "Cancelled by customer",
+            },
+          },
+        },
+      });
+
+      io.to(order.orderId).emit("orderCancelled", {
+        orderId: order.orderId,
+        customerName: order.customerName,
+        message: "Order has been cancelled",
+      });
+
+      io.to("admins").emit("orderCancelled", {
+        orderId: order.orderId,
+        customerName: order.customerName,
+        message: "Order has been cancelled",
+      });
+
+      callback({
+        success: true,
+        message: "Order cancelled successfully",
+      });
+    } catch (error) {
+      console.error(error);
+      callback({
+        success: false,
+        message: "Failed to cancel order",
+      });
+    }
+  });
+
+  // get my orders
+  socket.on("getMyOrders", async (data, callback) => {
+    try {
+      const ordersCollection = getCollection("orders");
+      const orders = await ordersCollection
+        .find({ customerPhone: data?.customerPhone })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      callback({
+        success: true,
+        message: "Orders retrieved successfully",
+        orders,
+      });
+    } catch (error) {
+      console.error(error);
+      callback({
+        success: false,
+        message: "Failed to get orders",
+      });
+    }
+  });
 };
