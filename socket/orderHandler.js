@@ -100,20 +100,25 @@ export const orderHandler = (io, socket) => {
         });
       }
 
-      await order.updateOne({
-        $set: {
-          status: "cancelled",
-          updatedAt: new Date(),
+      await ordersCollection.findOneAndUpdate(
+        {
+          orderId: data?.orderId,
         },
-        $push: {
-          statusHistory: {
+        {
+          $set: {
             status: "cancelled",
-            timestamp: new Date(),
-            by: socket.id,
-            note: data?.reason || "Cancelled by customer",
+            updatedAt: new Date(),
+          },
+          $push: {
+            statusHistory: {
+              status: "cancelled",
+              timestamp: new Date(),
+              by: socket.id,
+              note: data?.reason || "Cancelled by customer",
+            },
           },
         },
-      });
+      );
 
       io.to(order.orderId).emit("orderCancelled", {
         orderId: order.orderId,
@@ -247,7 +252,10 @@ export const orderHandler = (io, socket) => {
         });
       }
 
-      const result = await order.updateOne(
+      const result = await ordersCollection.findOneAndUpdate(
+        {
+          orderId: data?.orderId,
+        },
         {
           $set: {
             status: data.newStatus,
@@ -292,6 +300,75 @@ export const orderHandler = (io, socket) => {
       callback({
         success: false,
         message: "Failed to update order status",
+      });
+    }
+  });
+
+  // accept order by admin
+  socket.on("acceptOrder", async (data, callback) => {
+    try {
+      if (!socket.isAdmin) {
+        return callback({
+          success: false,
+          message: "Unauthorized",
+        });
+      }
+
+      const ordersCollection = getCollection("orders");
+      const order = await ordersCollection.findOne({ orderId: data?.orderId });
+
+      if (!order || order?.status !== "pending") {
+        return callback({
+          success: false,
+          message: "Order not found or cannot be accepted",
+        });
+      }
+
+      const estimatedTime = data?.estimatedTime || 30; // default estimated time is 30 minutes
+
+      const result = await ordersCollection.findOneAndUpdate(
+        {
+          orderId: data?.orderId,
+        },
+        {
+          $set: {
+            status: "confirmed",
+            estimatedTime,
+            updatedAt: new Date(),
+          },
+
+          $push: {
+            statusHistory: {
+              status: "confirmed",
+              timestamp: new Date(),
+              by: socket.id,
+              note: `Order accepted with estimated time ${estimatedTime} minutes`,
+            },
+          },
+        },
+        {
+          ReturnDocument: "after",
+        },
+      );
+
+      io.to(data.orderId).emit("orderAccepted", {
+        orderId: data.orderId,
+        estimatedTime,
+        order: result,
+        message: `Order accepted with estimated time ${estimatedTime} minutes`,
+      });
+
+      socket.to("admins").emit("orderAcceptedByAdmin", {
+        orderId: data.orderId,
+        estimatedTime,
+        order: result,
+        message: `Order accepted with estimated time ${estimatedTime} minutes`,
+      });
+    } catch (error) {
+      console.error(error);
+      callback({
+        success: false,
+        message: "Failed to accept order",
       });
     }
   });
