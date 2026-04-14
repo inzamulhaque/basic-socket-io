@@ -1,7 +1,9 @@
+import { ReturnDocument } from "mongodb";
 import { getCollection } from "../config/database.js";
 import {
   calculateTotal,
   createOrderDocument,
+  isValidStatusTransition,
   validatedOrder,
 } from "../utils/helper.js";
 
@@ -102,13 +104,13 @@ export const orderHandler = (io, socket) => {
         $set: {
           status: "cancelled",
           updatedAt: new Date(),
-          $push: {
-            statusHistory: {
-              status: "cancelled",
-              timestamp: new Date(),
-              by: socket.id,
-              note: data?.reason || "Cancelled by customer",
-            },
+        },
+        $push: {
+          statusHistory: {
+            status: "cancelled",
+            timestamp: new Date(),
+            by: socket.id,
+            note: data?.reason || "Cancelled by customer",
           },
         },
       });
@@ -199,11 +201,97 @@ export const orderHandler = (io, socket) => {
 
       const ordersCollection = getCollection("orders");
       const filter = data?.status ? { status: data.status } : {};
+      const orders = await ordersCollection
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      callback({
+        success: true,
+        message: "Orders retrieved successfully",
+        orders,
+      });
     } catch (error) {
       console.error(error);
       callback({
         success: false,
         message: "Failed to get orders",
+      });
+    }
+  });
+
+  // update order status by admin
+  socket.on("updateOrderStatus", async (data, callback) => {
+    try {
+      if (!socket.isAdmin) {
+        return callback({
+          success: false,
+          message: "Unauthorized",
+        });
+      }
+
+      const ordersCollection = getCollection("orders");
+      const order = await ordersCollection.findOne({ orderId: data?.orderId });
+
+      if (!order) {
+        return callback({
+          success: false,
+          message: "Order not found",
+        });
+      }
+
+      if (!isValidStatusTransition(order.status, data.newStatus)) {
+        return callback({
+          success: false,
+          message: "Invalid status transition",
+        });
+      }
+
+      const result = await order.updateOne(
+        {
+          $set: {
+            status: data.newStatus,
+            updatedAt: new Date(),
+          },
+
+          $push: {
+            statusHistory: {
+              status: data.newStatus,
+              timestamp: new Date(),
+              by: socket.id,
+              note: data?.note || `Status changed to ${data.newStatus}`,
+            },
+          },
+        },
+        {
+          ReturnDocument: "after",
+        },
+      );
+
+      io.to(data.orderId).emit("statusUpdated", {
+        orderId: data.orderId,
+        newStatus: data.newStatus,
+        order: result,
+        message: `Order status updated to ${data.newStatus}`,
+      });
+
+      socket.to("admins").emit("orderStatusChanged", {
+        orderId: data.orderId,
+        newStatus: data.newStatus,
+        order: result,
+        message: `Order status updated to ${data.newStatus}`,
+      });
+
+      callback({
+        success: true,
+        message: "Order status updated successfully",
+        order: result,
+      });
+    } catch (error) {
+      console.error(error);
+      callback({
+        success: false,
+        message: "Failed to update order status",
       });
     }
   });
