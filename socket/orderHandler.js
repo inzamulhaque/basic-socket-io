@@ -160,4 +160,51 @@ export const orderHandler = (io, socket) => {
       });
     }
   });
+
+  // admins event
+  socket.on("adminLogin", (data, callback) => {
+    try {
+      if (data?.password === process.env.ADMIN_PASSWORD) {
+        socket.isAdmin = true;
+        socket.join("admins");
+        console.log(`Admin logged in: ${socket.id}`);
+        callback({
+          success: true,
+          message: "Logged in as admin",
+        });
+      } else {
+        callback({
+          success: false,
+          message: "Invalid admin credentials",
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      callback({
+        success: false,
+        message: "Failed to login as admin",
+      });
+    }
+  });
+
+  // get all orders for admin
+  socket.on("getAllOrders", async (data, callback) => {
+    try {
+      if (!socket.isAdmin) {
+        return callback({
+          success: false,
+          message: "Unauthorized",
+        });
+      }
+
+      const ordersCollection = getCollection("orders");
+      const filter = data?.status ? { status: data.status } : {};
+    } catch (error) {
+      console.error(error);
+      callback({
+        success: false,
+        message: "Failed to get orders",
+      });
+    }
+  });
 };
