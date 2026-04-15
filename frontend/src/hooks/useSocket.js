@@ -16,13 +16,30 @@ const useSocket = () => {
     // connection event
     socketRef.current.on("connect", () => {
       setConnected(true);
-      console.log(`connected tp server: ${socketRef.current.id}`);
+      console.log(`connected to server: ${socketRef.current.id}`);
     });
 
+    // disconnection event
     socketRef.current.on("disconnect", () => {
       setConnected(false);
+      console.log("disconnected from server");
     });
+
+    // server messages
+    socketRef.current.on("connected", (data) => {
+      console.log("Server message:", data.message);
+    });
+
+    // cleanup on unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        console.log("Socket disconnected on cleanup");
+      }
+    };
   }, []);
+
+  return { socket: socketRef, connected };
 };
 
 export default useSocket;
