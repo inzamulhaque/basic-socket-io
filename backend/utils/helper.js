@@ -6,25 +6,36 @@ export const validatedOrder = (data) => {
     };
   }
 
-  if (!data?.customerphone?.trim()) {
+  if (!data?.customerPhone?.trim()) {
     return {
       valid: false,
       message: "Customer phone is required",
     };
   }
 
-  if (!data?.address?.trim()) {
+  if (!data?.customerAddress?.trim()) {
     return {
       valid: false,
       message: "Customer address is required",
     };
   }
 
-  if (Array.isArray(data?.items)) {
+  if (!Array.isArray(data?.items)) {
     return {
       valid: false,
       message: "Order have must at least one item",
     };
+  }
+
+  // Validate each item
+  for (let i = 0; i < data.items.length; i++) {
+    const item = data.items[i];
+    if (!item.name || !item.quantity || !item.price) {
+      return { valid: false, message: `Item ${i + 1} is incomplete` };
+    }
+    if (item.quantity <= 0 || item.price <= 0) {
+      return { valid: false, message: `Item ${i + 1} has invalid values` };
+    }
   }
 
   return {
@@ -72,10 +83,10 @@ export const createOrderDocument = (orderData, orderId, totals) => {
     customerPhone: orderData.customerPhone.trim(),
     customerAddress: orderData.customerAddress.trim(),
     items: orderData.items,
-    subtotal: totals.subtotal,
+    subTotal: totals.subTotal,
     tax: totals.tax,
     deliveryFee: totals.deliveryFee,
-    totalAmount: totals.totalAmount,
+    totalAmount: totals.total,
     specialNotes: orderData.specialNotes || "",
     paymentMethod: orderData.paymentMethod || "cash",
     paymentStatus: "pending",

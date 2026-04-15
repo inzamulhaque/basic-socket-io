@@ -3,6 +3,7 @@ import { getCollection } from "../config/database.js";
 import {
   calculateTotal,
   createOrderDocument,
+  generateOrderId,
   isValidStatusTransition,
   validatedOrder,
 } from "../utils/helper.js";
@@ -34,7 +35,7 @@ export const orderHandler = (io, socket) => {
       socket.join(orderId); // Join a room with the order ID
       socket.join("customers"); // Join a common room for all customers
 
-      socket.join("admins").emit("newOrder", { orderData }); // Notify admin about new order
+      io.to("admins").emit("newOrder", { orderData }); // Notify admin about new order
 
       callback({
         success: true,
@@ -42,7 +43,7 @@ export const orderHandler = (io, socket) => {
         order: orderData,
       });
 
-      console.log(`Order Placed: ${orderID}`);
+      console.log(`Order Placed: ${orderId}`);
     } catch (error) {
       console.error(error);
       callback({
@@ -57,6 +58,7 @@ export const orderHandler = (io, socket) => {
     try {
       const ordersCollection = getCollection("orders");
       const order = await ordersCollection.findOne({ orderId: data?.orderId });
+
       if (!order) {
         return callback({
           success: false,
@@ -451,7 +453,7 @@ export const orderHandler = (io, socket) => {
   });
 
   // get live stats
-  socket.on("getLiveStats", async (data, callback) => {
+  socket.on("getLiveStats", async (callback) => {
     try {
       if (!socket.isAdmin) {
         return callback({

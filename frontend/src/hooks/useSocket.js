@@ -39,7 +39,7 @@ const useSocket = () => {
     };
   }, []);
 
-  return { socket: socketRef, connected };
+  return { socket: socketRef.current, connected };
 };
 
 export default useSocket;
