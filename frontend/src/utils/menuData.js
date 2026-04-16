@@ -1,5 +1,6 @@
 // utils/menuData.js
 // Sample menu items
+// Demon json data for menu items
 
 export const menuItems = [
   {
